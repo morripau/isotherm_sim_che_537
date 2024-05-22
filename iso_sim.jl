@@ -5,10 +5,148 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 81561410-16f7-11ef-3750-2f145c751b9d
-using CairoMakie,CSV, DataFrames, ColorSchemes, Distributions, PlutoUI, Colors, LinearAlgebra, Makie
+using CairoMakie,CSV, DataFrames, ColorSchemes, Distributions, PlutoUI, Colors, LinearAlgebra, Makie, Optim
 
 # ╔═╡ 5332ed0e-dde1-4a1d-b3cc-dde597f7039c
 TableOfContents()
+
+# ╔═╡ b6e95c41-eb1b-4296-8772-4b01d1b288ab
+md"""
+# Global Constants
+"""
+
+# ╔═╡ 68701f5e-97d1-40fd-b6a1-fd286fa6d9b8
+begin
+	const gas_to_molecular_wt = Dict("CH4" => 16.04, 
+							   "H2"  => 2.016)
+	const gas_to_pretty_name = Dict("CH4" => "CH₄", "H2" => "H₂")
+	const mofs = ["UIO66"]
+	const gases = ["CH4", "H2"]
+	const temp = "303" #Kelvin
+	const gas_to_color = Dict(zip(gases, ColorSchemes.Accent_3[1:2]))
+	isotherm_filename(mof::String, gas::String, temp::String) = joinpath("csv", mof, gas, temp * ".csv")
+end
+
+# ╔═╡ f44398f4-a743-445c-9eb2-9c4a7c676376
+gas_to_color
+
+# ╔═╡ 9b8620df-5c7d-4d92-992e-89c8d384bb6b
+md"""
+# Load Data
+"""
+
+# ╔═╡ 99a3a4ce-d155-43db-8f89-04531db9ed40
+function load_data(mof::String, gas::String, temp::String)
+	filename = isotherm_filename(mof, gas, temp)
+	data = CSV.read(filename, DataFrame)
+	ads_units = "q [g/g]"
+	data[:, "q [g/g]"] = data[:, "q [mmol·g−1]"] * 1000 * gas_to_molecular_wt[gas]
+	return data[:, ["p [bar]", ads_units]]
+end
+
+# ╔═╡ 7ab17901-e28c-4e22-8638-a35c2315a8e4
+begin
+	isotherms = Dict()
+	for mof in mofs
+		isotherms[mof] = Dict()
+		for gas in gases
+			isotherms[mof][gas] = load_data(mof, gas, temp)
+			
+		end
+	end
+end
+
+# ╔═╡ 6a9b7170-8ab7-469e-ad11-284aa10c0292
+isotherms
+
+# ╔═╡ 3a1d57a6-9c8d-4ffe-9db7-3530aac14131
+md"""
+# Calculate Henry Coefficients
+"""
+
+# ╔═╡ 6199e690-7c35-4eda-b2a6-6fb4e413f0c8
+function fit_Henry(data::DataFrame)
+	
+	function minimize_me(θ)
+		H = θ[1]
+		ℓ = 0.0
+		
+		for row in eachrow(data)
+			nᵢ = row["q [g/g]"]
+			pᵢ = row["p [bar]"]
+			
+			n̂ᵢ = H * pᵢ
+			
+			ℓ += (nᵢ - n̂ᵢ) ^ 2
+		end
+		return ℓ
+	end
+	
+	H_guess = data[1, "q [g/g]"] / data[1, "p [bar]"]
+       
+	res = optimize(minimize_me, [H_guess], Newton())
+	return res.minimizer[1]
+end
+
+# ╔═╡ fa819555-5b37-4bc8-aa5c-7e315f011812
+begin
+	henry_data = Dict()
+	for mof in mofs
+		henry_data[mof] = Dict()
+		for gas in gases
+			data = isotherms[mof][gas]
+			henry_data[mof][gas] = fit_Henry(data)
+		end
+	end
+	henry_data
+end
+
+# ╔═╡ ddddee88-13b5-42b0-ab85-f8a14140c264
+function viz_adsorption_data(mof::String; viz_henry::Bool=true, save_fig::Bool=true)
+	fig = Figure()
+	ax = Axis(fig[1, 1], xlabel="pressure [bar]",  ylabel="uptake [g gas/g ZIF]", title=mof)
+
+	
+	for gas in gases
+		data = isotherms[mof][gas]
+		#=
+		scatter!(data[1:2, "P(bar)"], data[1:2, "N(g/g)"],
+			     strokewidth=2, color=gas_to_color[gas],
+			     strokecolor=gas_to_color[gas], )
+		scatter!(data[3:end, "P(bar)"], data[3:end, "N(g/g)"],
+			     strokewidth=2, color=(:white, 0.0),
+			     strokecolor=gas_to_color[gas], label=gas_to_pretty_name[gas])
+		=#
+		scatter!(data[:, "p [bar]"], data[:, "q [g/g]"],
+			     strokewidth=2, color=gas_to_color[gas],
+			     strokecolor=gas_to_color[gas], label=gas)
+	end
+	
+	if viz_henry
+		ps = [0.0, 100.0]
+		for gas in gases
+			H = henry_data[mof][gas]
+			ms = H * ps
+			lines!(ps, ms, color=gas_to_color[gas])
+		end
+	end
+	
+	axislegend(position=:lt)
+	
+	xlims!(0.0, 61.0)
+	ylims!(0.0, 6.0*10^4)
+	if save_fig
+		if viz_henry
+			save(mof * "_H_fits.pdf", fig)
+		else
+			save(mof * "_ads_data.pdf", fig)
+		end
+	end
+	fig
+end
+
+# ╔═╡ 4f7b9060-19ca-4d7d-af9f-3c5c59dbfa51
+viz_adsorption_data(mofs[1], save_fig=false)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -21,6 +159,7 @@ DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
+Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 
 [compat]
@@ -31,6 +170,7 @@ Colors = "~0.12.11"
 DataFrames = "~1.6.1"
 Distributions = "~0.25.108"
 Makie = "~0.21.0"
+Optim = "~1.9.4"
 PlutoUI = "~0.7.59"
 """
 
@@ -40,7 +180,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.3"
 manifest_format = "2.0"
-project_hash = "ff98f3e3f41bbd7bf3b55e548f86645f5f22a558"
+project_hash = "ae0569f03583bfd3bf183ec0ecb516b9df14bad0"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -89,6 +229,34 @@ version = "0.4.1"
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
 version = "1.1.1"
+
+[[deps.ArrayInterface]]
+deps = ["Adapt", "LinearAlgebra", "SparseArrays", "SuiteSparse"]
+git-tree-sha1 = "133a240faec6e074e07c31ee75619c90544179cf"
+uuid = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
+version = "7.10.0"
+
+    [deps.ArrayInterface.extensions]
+    ArrayInterfaceBandedMatricesExt = "BandedMatrices"
+    ArrayInterfaceBlockBandedMatricesExt = "BlockBandedMatrices"
+    ArrayInterfaceCUDAExt = "CUDA"
+    ArrayInterfaceCUDSSExt = "CUDSS"
+    ArrayInterfaceChainRulesExt = "ChainRules"
+    ArrayInterfaceGPUArraysCoreExt = "GPUArraysCore"
+    ArrayInterfaceReverseDiffExt = "ReverseDiff"
+    ArrayInterfaceStaticArraysCoreExt = "StaticArraysCore"
+    ArrayInterfaceTrackerExt = "Tracker"
+
+    [deps.ArrayInterface.weakdeps]
+    BandedMatrices = "aae01518-5342-5314-be14-df237901396f"
+    BlockBandedMatrices = "ffab5731-97b5-5995-9138-79e8c1846df0"
+    CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+    CUDSS = "45b445bb-4962-46a0-9369-b4df9d0f772e"
+    ChainRules = "082447d4-558c-5d27-93f4-14fc19e9eca2"
+    GPUArraysCore = "46192b85-c4d5-4398-a991-12ede77f4527"
+    ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
+    StaticArraysCore = "1e83bf80-4336-4d27-bf5d-d5a4f845583c"
+    Tracker = "9f7883ad-71c0-57eb-9f7f-b5c9e6d3789c"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
@@ -214,6 +382,12 @@ git-tree-sha1 = "362a287c3aa50601b0bc359053d5c2468f0e7ce0"
 uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
 version = "0.12.11"
 
+[[deps.CommonSubexpressions]]
+deps = ["MacroTools", "Test"]
+git-tree-sha1 = "7b8a93dba8af7e3b42fecabf646260105ac373f7"
+uuid = "bbf7d656-a473-5ed7-a52c-81e309532950"
+version = "0.3.0"
+
 [[deps.Compat]]
 deps = ["TOML", "UUIDs"]
 git-tree-sha1 = "b1c55339b7c6c350ee89f2c1604299660525b248"
@@ -281,6 +455,18 @@ deps = ["EnumX", "ExactPredicates", "Random"]
 git-tree-sha1 = "1755070db557ec2c37df2664c75600298b0c1cfc"
 uuid = "927a84f5-c5f4-47a5-9785-b46e178433df"
 version = "1.0.3"
+
+[[deps.DiffResults]]
+deps = ["StaticArraysCore"]
+git-tree-sha1 = "782dd5f4561f5d267313f23853baaaa4c52ea621"
+uuid = "163ba53b-c6d8-5494-b064-1a9d43ac40c5"
+version = "1.1.0"
+
+[[deps.DiffRules]]
+deps = ["IrrationalConstants", "LogExpFunctions", "NaNMath", "Random", "SpecialFunctions"]
+git-tree-sha1 = "23163d55f885173722d1e4cf0f6110cdbaf7e272"
+uuid = "b552c78f-8df3-52c6-915a-8e097449b14b"
+version = "1.15.1"
 
 [[deps.Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
@@ -398,6 +584,22 @@ weakdeps = ["PDMats", "SparseArrays", "Statistics"]
     FillArraysSparseArraysExt = "SparseArrays"
     FillArraysStatisticsExt = "Statistics"
 
+[[deps.FiniteDiff]]
+deps = ["ArrayInterface", "LinearAlgebra", "Requires", "Setfield", "SparseArrays"]
+git-tree-sha1 = "2de436b72c3422940cbe1367611d137008af7ec3"
+uuid = "6a86dc24-6348-571c-b903-95158fe2bd41"
+version = "2.23.1"
+
+    [deps.FiniteDiff.extensions]
+    FiniteDiffBandedMatricesExt = "BandedMatrices"
+    FiniteDiffBlockBandedMatricesExt = "BlockBandedMatrices"
+    FiniteDiffStaticArraysExt = "StaticArrays"
+
+    [deps.FiniteDiff.weakdeps]
+    BandedMatrices = "aae01518-5342-5314-be14-df237901396f"
+    BlockBandedMatrices = "ffab5731-97b5-5995-9138-79e8c1846df0"
+    StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+
 [[deps.FixedPointNumbers]]
 deps = ["Statistics"]
 git-tree-sha1 = "05882d6995ae5c12bb5f36dd2ed3f61c98cbb172"
@@ -414,6 +616,16 @@ version = "2.13.96+0"
 git-tree-sha1 = "9c68794ef81b08086aeb32eeaf33531668d5f5fc"
 uuid = "1fa38f19-a742-5d3f-a2b9-30dd87b9d5f8"
 version = "1.3.7"
+
+[[deps.ForwardDiff]]
+deps = ["CommonSubexpressions", "DiffResults", "DiffRules", "LinearAlgebra", "LogExpFunctions", "NaNMath", "Preferences", "Printf", "Random", "SpecialFunctions"]
+git-tree-sha1 = "cf0fe81336da9fb90944683b8c41984b08793dad"
+uuid = "f6369f11-7733-5829-9624-2563aa707210"
+version = "0.10.36"
+weakdeps = ["StaticArrays"]
+
+    [deps.ForwardDiff.extensions]
+    ForwardDiffStaticArraysExt = "StaticArrays"
 
 [[deps.FreeType]]
 deps = ["CEnum", "FreeType2_jll"]
@@ -774,6 +986,12 @@ git-tree-sha1 = "5ee6203157c120d79034c748a2acba45b82b8807"
 uuid = "38a345b3-de98-5d2b-a5d3-14cd9215e700"
 version = "2.40.1+0"
 
+[[deps.LineSearches]]
+deps = ["LinearAlgebra", "NLSolversBase", "NaNMath", "Parameters", "Printf"]
+git-tree-sha1 = "7bbea35cec17305fc70a0e5b4641477dc0789d9d"
+uuid = "d3d80556-e9d4-5f37-9878-2ab0fcc64255"
+version = "7.2.0"
+
 [[deps.LinearAlgebra]]
 deps = ["Libdl", "OpenBLAS_jll", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
@@ -865,6 +1083,12 @@ version = "0.3.4"
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
 version = "2023.1.10"
 
+[[deps.NLSolversBase]]
+deps = ["DiffResults", "Distributed", "FiniteDiff", "ForwardDiff"]
+git-tree-sha1 = "a0b464d183da839699f4c79e7606d9d186ec172c"
+uuid = "d41bc354-129a-5804-8e4c-c37616107c6c"
+version = "7.8.3"
+
 [[deps.NaNMath]]
 deps = ["OpenLibm_jll"]
 git-tree-sha1 = "0877504529a3e5c3343c6f8b4c0381e57e4387e4"
@@ -935,6 +1159,18 @@ git-tree-sha1 = "13652491f6856acfd2db29360e1bbcd4565d04f1"
 uuid = "efe28fd5-8261-553b-a9e1-b2916fc3738e"
 version = "0.5.5+0"
 
+[[deps.Optim]]
+deps = ["Compat", "FillArrays", "ForwardDiff", "LineSearches", "LinearAlgebra", "NLSolversBase", "NaNMath", "Parameters", "PositiveFactorizations", "Printf", "SparseArrays", "StatsBase"]
+git-tree-sha1 = "d9b79c4eed437421ac4285148fcadf42e0700e89"
+uuid = "429524aa-4258-5aef-a3af-852621145aeb"
+version = "1.9.4"
+
+    [deps.Optim.extensions]
+    OptimMOIExt = "MathOptInterface"
+
+    [deps.Optim.weakdeps]
+    MathOptInterface = "b8f27783-ece8-5eb3-8dc8-9495eed66fee"
+
 [[deps.Opus_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "51a08fb14ec28da2ec7a927c4337e4332c2a4720"
@@ -981,6 +1217,12 @@ git-tree-sha1 = "cb5a2ab6763464ae0f19c86c56c63d4a2b0f5bda"
 uuid = "36c8627f-9965-5494-a995-c6b170f724f3"
 version = "1.52.2+0"
 
+[[deps.Parameters]]
+deps = ["OrderedCollections", "UnPack"]
+git-tree-sha1 = "34c0e9ad262e5f7fc75b10a9952ca7692cfc5fbe"
+uuid = "d96e819e-fc66-5662-9728-84c9c7592b0a"
+version = "0.12.3"
+
 [[deps.Parsers]]
 deps = ["Dates", "PrecompileTools", "UUIDs"]
 git-tree-sha1 = "8489905bcdbcfac64d1daa51ca07c0d8f0283821"
@@ -1026,6 +1268,12 @@ deps = ["DataAPI", "Future"]
 git-tree-sha1 = "36d8b4b899628fb92c2749eb488d884a926614d3"
 uuid = "2dfb63ee-cc39-5dd5-95bd-886bf059d720"
 version = "1.4.3"
+
+[[deps.PositiveFactorizations]]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "17275485f373e6673f7e7f97051f703ed5b15b20"
+uuid = "85a6dd25-e78a-55b7-8502-1745935b8125"
+version = "0.2.4"
 
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
@@ -1148,6 +1396,12 @@ version = "1.4.2"
 
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
+
+[[deps.Setfield]]
+deps = ["ConstructionBase", "Future", "MacroTools", "StaticArraysCore"]
+git-tree-sha1 = "e2cc6d8c88613c05e1defb55170bf5ff211fbeac"
+uuid = "efcf1570-3423-57d1-acb7-fd33fddbac46"
+version = "1.1.1"
 
 [[deps.ShaderAbstractions]]
 deps = ["ColorTypes", "FixedPointNumbers", "GeometryBasics", "LinearAlgebra", "Observables", "StaticArrays", "StructArrays", "Tables"]
@@ -1359,6 +1613,11 @@ version = "1.5.1"
 deps = ["Random", "SHA"]
 uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
+[[deps.UnPack]]
+git-tree-sha1 = "387c1f73762231e86e0c9c5443ce3b4a0a9a0c2b"
+uuid = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
+version = "1.0.2"
+
 [[deps.Unicode]]
 uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
 
@@ -1543,5 +1802,17 @@ version = "3.5.0+0"
 # ╔═╡ Cell order:
 # ╠═81561410-16f7-11ef-3750-2f145c751b9d
 # ╠═5332ed0e-dde1-4a1d-b3cc-dde597f7039c
+# ╟─b6e95c41-eb1b-4296-8772-4b01d1b288ab
+# ╠═68701f5e-97d1-40fd-b6a1-fd286fa6d9b8
+# ╠═f44398f4-a743-445c-9eb2-9c4a7c676376
+# ╟─9b8620df-5c7d-4d92-992e-89c8d384bb6b
+# ╠═99a3a4ce-d155-43db-8f89-04531db9ed40
+# ╠═7ab17901-e28c-4e22-8638-a35c2315a8e4
+# ╠═6a9b7170-8ab7-469e-ad11-284aa10c0292
+# ╟─3a1d57a6-9c8d-4ffe-9db7-3530aac14131
+# ╠═6199e690-7c35-4eda-b2a6-6fb4e413f0c8
+# ╠═fa819555-5b37-4bc8-aa5c-7e315f011812
+# ╠═ddddee88-13b5-42b0-ab85-f8a14140c264
+# ╠═4f7b9060-19ca-4d7d-af9f-3c5c59dbfa51
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

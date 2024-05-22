@@ -95,7 +95,7 @@ begin
 		henry_data[mof] = Dict()
 		for gas in gases
 			data = isotherms[mof][gas]
-			henry_data[mof][gas] = fit_Henry(data)
+			henry_data[mof][gas] = fit_Henry(data[1:3, :])
 		end
 	end
 	henry_data
@@ -109,17 +109,17 @@ function viz_adsorption_data(mof::String; viz_henry::Bool=true, save_fig::Bool=t
 	
 	for gas in gases
 		data = isotherms[mof][gas]
-		#=
-		scatter!(data[1:2, "P(bar)"], data[1:2, "N(g/g)"],
+
+		scatter!(data[1:3, "p [bar]"], data[1:3, "q [g/g]"],
 			     strokewidth=2, color=gas_to_color[gas],
 			     strokecolor=gas_to_color[gas], )
-		scatter!(data[3:end, "P(bar)"], data[3:end, "N(g/g)"],
+		scatter!(data[4:end, "p [bar]"], data[4:end, "q [g/g]"],
 			     strokewidth=2, color=(:white, 0.0),
 			     strokecolor=gas_to_color[gas], label=gas_to_pretty_name[gas])
-		=#
-		scatter!(data[:, "p [bar]"], data[:, "q [g/g]"],
+
+		#=scatter!(data[:, "p [bar]"], data[:, "q [g/g]"],
 			     strokewidth=2, color=gas_to_color[gas],
-			     strokecolor=gas_to_color[gas], label=gas)
+			     strokecolor=gas_to_color[gas], label=gas)=#
 	end
 	
 	if viz_henry
@@ -131,10 +131,10 @@ function viz_adsorption_data(mof::String; viz_henry::Bool=true, save_fig::Bool=t
 		end
 	end
 	
-	axislegend(position=:lt)
+	axislegend(position=:rt)
 	
-	xlims!(0.0, 61.0)
-	ylims!(0.0, 6.0*10^4)
+	xlims!(0.0, 35.0)
+	ylims!(0.0, 6.0*10^3)
 	if save_fig
 		if viz_henry
 			save(mof * "_H_fits.pdf", fig)

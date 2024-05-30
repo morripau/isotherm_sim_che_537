@@ -21,14 +21,15 @@ begin
 							   "H2"  => 2.016)
 	const gas_to_pretty_name = Dict("CH4" => "CH₄", "H2" => "H₂")
 	const mofs = ["UIO66"]
-	const gases = ["CH4", "H2"]
-	const temp = "303" #Kelvin
+	const gases = ["CH4"]
+	const temps = ["269", "219", "303", "333", "373"] #Kelvin
 	const gas_to_color = Dict(zip(gases, ColorSchemes.Accent_3[1:2]))
+	const temp_to_color = Dict(zip(temps, ColorSchemes.hawaii10[1:5]))
 	isotherm_filename(mof::String, gas::String, temp::String) = joinpath("csv", mof, gas, temp * ".csv")
 end
 
 # ╔═╡ f44398f4-a743-445c-9eb2-9c4a7c676376
-gas_to_color
+temp_to_color
 
 # ╔═╡ 9b8620df-5c7d-4d92-992e-89c8d384bb6b
 md"""
@@ -40,8 +41,9 @@ function load_data(mof::String, gas::String, temp::String)
 	filename = isotherm_filename(mof, gas, temp)
 	data = CSV.read(filename, DataFrame)
 	ads_units = "q [g/g]"
-	data[:, "q [g/g]"] = data[:, "q [mmol·g−1]"] * 1000 * gas_to_molecular_wt[gas]
+	data[:, ads_units] = data[:, "q [mmol g-1]"] * 1000 * gas_to_molecular_wt[gas]
 	return data[:, ["p [bar]", ads_units]]
+	#return data
 end
 
 # ╔═╡ 7ab17901-e28c-4e22-8638-a35c2315a8e4
@@ -50,8 +52,10 @@ begin
 	for mof in mofs
 		isotherms[mof] = Dict()
 		for gas in gases
-			isotherms[mof][gas] = load_data(mof, gas, temp)
-			
+			isotherms[mof][gas] = Dict()
+			for temp in temps
+				isotherms[mof][gas][temp] = load_data(mof, gas, temp)
+			end
 		end
 	end
 end
@@ -82,7 +86,7 @@ function fit_Henry(data::DataFrame)
 		return ℓ
 	end
 	
-	H_guess = data[1, "q [g/g]"] / data[1, "p [bar]"]
+	H_guess = data[2, "q [g/g]"] / data[2, "p [bar]"]
        
 	res = optimize(minimize_me, [H_guess], Newton())
 	return res.minimizer[1]
@@ -94,28 +98,34 @@ begin
 	for mof in mofs
 		henry_data[mof] = Dict()
 		for gas in gases
-			data = isotherms[mof][gas]
-			henry_data[mof][gas] = fit_Henry(data[1:3, :])
+			henry_data[mof][gas] = Dict()
+			for temp in temps
+				data = isotherms[mof][gas][temp]
+				henry_data[mof][gas][temp] = fit_Henry(data[1:3, :])
+			end
 		end
 	end
 	henry_data
 end
 
+# ╔═╡ b5a0f095-4e99-4283-85cf-ed9000be0df7
+isotherms[mofs[1]][gases[1]]
+
 # ╔═╡ ddddee88-13b5-42b0-ab85-f8a14140c264
-function viz_adsorption_data(mof::String; viz_henry::Bool=true, save_fig::Bool=true)
+function viz_adsorption_data(mof::String, gas::String; viz_henry::Bool=true, save_fig::Bool=true)
 	fig = Figure()
 	ax = Axis(fig[1, 1], xlabel="pressure [bar]",  ylabel="uptake [g gas/g ZIF]", title=mof)
 
 	
-	for gas in gases
-		data = isotherms[mof][gas]
+	for temp in temps
+		data = isotherms[mof][gas][temp]
 
 		scatter!(data[1:3, "p [bar]"], data[1:3, "q [g/g]"],
-			     strokewidth=2, color=gas_to_color[gas],
-			     strokecolor=gas_to_color[gas], )
+			     strokewidth=2, color=temp_to_color[temp],
+			     strokecolor=temp_to_color[temp], )
 		scatter!(data[4:end, "p [bar]"], data[4:end, "q [g/g]"],
 			     strokewidth=2, color=(:white, 0.0),
-			     strokecolor=gas_to_color[gas], label=gas_to_pretty_name[gas])
+			     strokecolor=temp_to_color[temp], label=temp)
 
 		#=scatter!(data[:, "p [bar]"], data[:, "q [g/g]"],
 			     strokewidth=2, color=gas_to_color[gas],
@@ -124,17 +134,17 @@ function viz_adsorption_data(mof::String; viz_henry::Bool=true, save_fig::Bool=t
 	
 	if viz_henry
 		ps = [0.0, 100.0]
-		for gas in gases
-			H = henry_data[mof][gas]
+		for temp in temps
+			H = henry_data[mof][gas][temp]
 			ms = H * ps
-			lines!(ps, ms, color=gas_to_color[gas])
+			lines!(ps, ms, color=temp_to_color[temp])
 		end
 	end
 	
-	axislegend(position=:rt)
+	axislegend(position=:rt, "temp [k]")
 	
 	xlims!(0.0, 35.0)
-	ylims!(0.0, 6.0*10^3)
+	ylims!(0.0, 7.5*10^4)
 	if save_fig
 		if viz_henry
 			save(mof * "_H_fits.pdf", fig)
@@ -146,7 +156,7 @@ function viz_adsorption_data(mof::String; viz_henry::Bool=true, save_fig::Bool=t
 end
 
 # ╔═╡ 4f7b9060-19ca-4d7d-af9f-3c5c59dbfa51
-viz_adsorption_data(mofs[1], save_fig=false)
+viz_adsorption_data(mofs[1], gases[1], save_fig=false)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1812,6 +1822,7 @@ version = "3.5.0+0"
 # ╟─3a1d57a6-9c8d-4ffe-9db7-3530aac14131
 # ╠═6199e690-7c35-4eda-b2a6-6fb4e413f0c8
 # ╠═fa819555-5b37-4bc8-aa5c-7e315f011812
+# ╠═b5a0f095-4e99-4283-85cf-ed9000be0df7
 # ╠═ddddee88-13b5-42b0-ab85-f8a14140c264
 # ╠═4f7b9060-19ca-4d7d-af9f-3c5c59dbfa51
 # ╟─00000000-0000-0000-0000-000000000001

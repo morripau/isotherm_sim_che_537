@@ -25,7 +25,8 @@ begin
 	const temps = ["269", "219", "303", "333", "373"] #Kelvin
 	const gas_to_color = Dict(zip(gases, ColorSchemes.Accent_3[1:2]))
 	const temp_to_color = Dict(zip(temps, ColorSchemes.hawaii10[1:2:9]))
-	isotherm_filename(mof::String, gas::String, temp::String) = joinpath("csv", mof, gas, temp * ".csv")
+	exp_isotherm_filename(mof::String, gas::String, temp::String) = joinpath("csv", mof, gas, "exp", temp * ".csv")
+	sim_isotherm_filename(mof::String, gas::String, temp::String) = joinpath("csv", mof, gas, "sim", temp * ".csv")
 end
 
 # ╔═╡ f44398f4-a743-445c-9eb2-9c4a7c676376
@@ -37,8 +38,12 @@ md"""
 """
 
 # ╔═╡ 99a3a4ce-d155-43db-8f89-04531db9ed40
-function load_data(mof::String, gas::String, temp::String)
-	filename = isotherm_filename(mof, gas, temp)
+function load_data(mof::String, gas::String, temp::String; exp::Bool=true)
+	if exp
+		filename = exp_isotherm_filename(mof, gas, temp)
+	else
+		filename = sim_isotherm_filename(mof, gas, temp)
+	end
 	data = CSV.read(filename, DataFrame)
 	ads_units = "q [g/g]"
 	data[:, ads_units] = data[:, "q [mmol g-1]"] * 1000 * gas_to_molecular_wt[gas]
@@ -115,9 +120,9 @@ isotherms[mofs[1]][gases[1]]
 typeof(temps)
 
 # ╔═╡ ddddee88-13b5-42b0-ab85-f8a14140c264
-function viz_adsorption_data(mof::String, gas::String, temps::Vector{String}; viz_henry::Bool=true, save_fig::Bool=true)
+function viz_adsorption_data(mof::String, gas::String, temps::Vector{String}; viz_henry::Bool=true, save_fig::Bool=true, title::String="")
 	fig = Figure()
-	ax = Axis(fig[1, 1], xlabel="pressure [bar]",  ylabel="uptake [g gas/g ZIF]", title="$(mof), $(gas), equilibrium adsorption by temp", xlabelsize=20, ylabelsize=20, titlesize=20)
+	ax = Axis(fig[1, 1], xlabel="pressure [bar]",  ylabel="uptake [g gas/g ZIF]", title="$(mof), $(gas), $(title) equilibrium adsorption", xlabelsize=20, ylabelsize=20, titlesize=20)
 
 	
 	for temp in temps
@@ -159,7 +164,7 @@ function viz_adsorption_data(mof::String, gas::String, temps::Vector{String}; vi
 end
 
 # ╔═╡ 4f7b9060-19ca-4d7d-af9f-3c5c59dbfa51
-viz_adsorption_data(mofs[1], gases[1],temps, save_fig=false)
+viz_adsorption_data(mofs[1], gases[1],temps, save_fig=false, title="experimental")
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """

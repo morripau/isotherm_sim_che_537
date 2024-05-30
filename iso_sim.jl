@@ -24,7 +24,7 @@ begin
 	const gases = ["CH4"]
 	const temps = ["269", "219", "303", "333", "373"] #Kelvin
 	const gas_to_color = Dict(zip(gases, ColorSchemes.Accent_3[1:2]))
-	const temp_to_color = Dict(zip(temps, ColorSchemes.hawaii10[1:5]))
+	const temp_to_color = Dict(zip(temps, ColorSchemes.hawaii10[1:2:9]))
 	isotherm_filename(mof::String, gas::String, temp::String) = joinpath("csv", mof, gas, temp * ".csv")
 end
 
@@ -117,7 +117,7 @@ typeof(temps)
 # ╔═╡ ddddee88-13b5-42b0-ab85-f8a14140c264
 function viz_adsorption_data(mof::String, gas::String, temps::Vector{String}; viz_henry::Bool=true, save_fig::Bool=true)
 	fig = Figure()
-	ax = Axis(fig[1, 1], xlabel="pressure [bar]",  ylabel="uptake [g gas/g ZIF]", title=mof)
+	ax = Axis(fig[1, 1], xlabel="pressure [bar]",  ylabel="uptake [g gas/g ZIF]", title="$(mof), $(gas), equilibrium adsorption by temp", xlabelsize=20, ylabelsize=20, titlesize=20)
 
 	
 	for temp in temps
@@ -144,9 +144,9 @@ function viz_adsorption_data(mof::String, gas::String, temps::Vector{String}; vi
 		end
 	end
 	
-	axislegend(position=:rt, "temp [k]")
+	axislegend(position=:lt, "temp [k]")
 	
-	xlims!(0.0, 35.0)
+	xlims!(0.0, 5.0)
 	ylims!(0.0, 7.5*10^4)
 	if save_fig
 		if viz_henry

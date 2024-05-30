@@ -111,8 +111,11 @@ end
 # ╔═╡ b5a0f095-4e99-4283-85cf-ed9000be0df7
 isotherms[mofs[1]][gases[1]]
 
+# ╔═╡ e4ba03b4-949a-40d0-8fd0-6e518de3a5ae
+typeof(temps)
+
 # ╔═╡ ddddee88-13b5-42b0-ab85-f8a14140c264
-function viz_adsorption_data(mof::String, gas::String; viz_henry::Bool=true, save_fig::Bool=true)
+function viz_adsorption_data(mof::String, gas::String, temps::Vector{String}; viz_henry::Bool=true, save_fig::Bool=true)
 	fig = Figure()
 	ax = Axis(fig[1, 1], xlabel="pressure [bar]",  ylabel="uptake [g gas/g ZIF]", title=mof)
 
@@ -156,7 +159,7 @@ function viz_adsorption_data(mof::String, gas::String; viz_henry::Bool=true, sav
 end
 
 # ╔═╡ 4f7b9060-19ca-4d7d-af9f-3c5c59dbfa51
-viz_adsorption_data(mofs[1], gases[1], save_fig=false)
+viz_adsorption_data(mofs[1], gases[1],temps, save_fig=false)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1823,6 +1826,7 @@ version = "3.5.0+0"
 # ╠═6199e690-7c35-4eda-b2a6-6fb4e413f0c8
 # ╠═fa819555-5b37-4bc8-aa5c-7e315f011812
 # ╠═b5a0f095-4e99-4283-85cf-ed9000be0df7
+# ╠═e4ba03b4-949a-40d0-8fd0-6e518de3a5ae
 # ╠═ddddee88-13b5-42b0-ab85-f8a14140c264
 # ╠═4f7b9060-19ca-4d7d-af9f-3c5c59dbfa51
 # ╟─00000000-0000-0000-0000-000000000001

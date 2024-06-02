@@ -22,7 +22,7 @@ begin
 	const gas_to_pretty_name = Dict("CH4" => "CH₄", "H2" => "H₂")
 	const mofs = ["UIO66"]
 	const gases = ["CH4"]
-	const temps = ["269", "219", "303", "333", "373"] #Kelvin
+	const temps = ["219", "269", "303", "333", "373"] #Kelvin
 	const gas_to_color = Dict(zip(gases, ColorSchemes.Accent_3[1:2]))
 	const temp_to_color = Dict(zip(temps, ColorSchemes.hawaii10[1:2:9]))
 	exp_isotherm_filename(mof::String, gas::String, temp::String) = joinpath("csv", mof, gas, "exp", temp * ".csv")
@@ -56,10 +56,17 @@ begin
 	isotherms = Dict()
 	for mof in mofs
 		isotherms[mof] = Dict()
-		for gas in gases
-			isotherms[mof][gas] = Dict()
-			for temp in temps
-				isotherms[mof][gas][temp] = load_data(mof, gas, temp)
+		for data_type in ["sim", "exp"]
+			isotherms[mof][data_type] = Dict()
+			for gas in gases
+				isotherms[mof][data_type][gas] = Dict()
+				for temp in temps
+					if data_type == "exp"
+						isotherms[mof][data_type][gas][temp] = load_data(mof, gas, temp, exp=true)
+					else
+						isotherms[mof][data_type][gas][temp] = load_data(mof, gas, temp, exp=false)
+					end
+				end
 			end
 		end
 	end
@@ -99,14 +106,28 @@ end
 
 # ╔═╡ fa819555-5b37-4bc8-aa5c-7e315f011812
 begin
+	analytical_henry = Dict( "CH4" => Dict(
+		temps[1] => 0.000363371 * 100000 * 1000 * gas_to_molecular_wt["CH4"],
+		temps[2] => 0.0000490252 * 100000 * 1000 * gas_to_molecular_wt["CH4"],
+		temps[3] => 0.000018294 * 100000 * 1000 * gas_to_molecular_wt["CH4"],
+		temps[4] => 0.00000904894 * 100000 * 1000 * gas_to_molecular_wt["CH4"],
+		temps[5] => 0.00000420928 * 100000 * 1000 * gas_to_molecular_wt["CH4"]
+	))
 	henry_data = Dict()
 	for mof in mofs
 		henry_data[mof] = Dict()
-		for gas in gases
-			henry_data[mof][gas] = Dict()
-			for temp in temps
-				data = isotherms[mof][gas][temp]
-				henry_data[mof][gas][temp] = fit_Henry(data[1:3, :])
+		for data_type in ["sim", "exp", "ana"]
+			if data_type == "ana"
+				henry_data[mof][data_type] = analytical_henry
+			else
+				henry_data[mof][data_type] = Dict()
+				for gas in gases
+					henry_data[mof][data_type][gas] = Dict()
+					for temp in temps
+						data = isotherms[mof][data_type][gas][temp]
+						henry_data[mof][data_type][gas][temp] = fit_Henry(data[1:3, :])
+					end
+				end
 			end
 		end
 	end
@@ -114,19 +135,19 @@ begin
 end
 
 # ╔═╡ b5a0f095-4e99-4283-85cf-ed9000be0df7
-isotherms[mofs[1]][gases[1]]
+isotherms[mofs[1]]["sim"][gases[1]]
 
 # ╔═╡ e4ba03b4-949a-40d0-8fd0-6e518de3a5ae
-typeof(temps)
+typeof((0.0, 7.5*10^4))
 
 # ╔═╡ ddddee88-13b5-42b0-ab85-f8a14140c264
-function viz_adsorption_data(mof::String, gas::String, temps::Vector{String}; viz_henry::Bool=true, save_fig::Bool=true, title::String="")
+function viz_adsorption_data(mof::String, gas::String, temps::Vector{String}; viz_henry::Bool=true, save_fig::Bool=true, title::String="", data_type::String="exp", xlims::Tuple{Float64, Float64}=(0.0, 5.0), ylims::Tuple{Float64, Float64}=(0.0, 7.5*10^4))
 	fig = Figure()
 	ax = Axis(fig[1, 1], xlabel="pressure [bar]",  ylabel="uptake [g gas/g ZIF]", title="$(mof), $(gas), $(title) equilibrium adsorption", xlabelsize=20, ylabelsize=20, titlesize=20)
 
 	
 	for temp in temps
-		data = isotherms[mof][gas][temp]
+		data = isotherms[mof][data_type][gas][temp]
 
 		scatter!(data[1:3, "p [bar]"], data[1:3, "q [g/g]"],
 			     strokewidth=2, color=temp_to_color[temp],
@@ -143,16 +164,80 @@ function viz_adsorption_data(mof::String, gas::String, temps::Vector{String}; vi
 	if viz_henry
 		ps = [0.0, 100.0]
 		for temp in temps
-			H = henry_data[mof][gas][temp]
+			H = henry_data[mof][data_type][gas][temp]
 			ms = H * ps
 			lines!(ps, ms, color=temp_to_color[temp])
 		end
 	end
+
+	if data_type == "exp"
+		axislegend(position=:lt, "temp [k]")
+	else
+		axislegend(position=:rt, "temp [k]")
+	end
 	
-	axislegend(position=:lt, "temp [k]")
+	xlims!(xlims[1], xlims[2])
+	ylims!(ylims[1], ylims[2])
+	if save_fig
+		if viz_henry
+			save(mof * "_H_fits.pdf", fig)
+		else
+			save(mof * "_ads_data.pdf", fig)
+		end
+	end
+	fig
+end
+
+# ╔═╡ 0456fa38-f319-4f5d-b9cb-c8b8a233c3ab
+Dict(zip(["bla"], [1]))["bla"]
+
+# ╔═╡ cef60e16-df47-45c3-b5b6-24de8cf66b65
+function viz_adsorption_data_by_temp(mof::String, gas::String, temp::String; viz_henry::Bool=true, save_fig::Bool=false, title::String="", xlims::Tuple{Float64, Float64}=(0.0, 5.0), ylims::Tuple{Float64, Float64}=(0.0, 7.5*10^4))
+	fig = Figure()
+	ax = Axis(fig[1, 1], xlabel="pressure [bar]",  ylabel="uptake [g gas/g ZIF]", title="$(mof), $(gas), equilibrium adsorption at $(temp) kelvin", xlabelsize=20, ylabelsize=20, titlesize=20)
+
+	data_types = ["sim", "exp", "ana"]
+	colors = Dict(zip(data_types, [ColorSchemes.batlow10[i] for i in [1, 9, 5]]))
+	for data_type in data_types
+		if data_type != "ana"
+			data = isotherms[mof][data_type][gas][temp]
 	
-	xlims!(0.0, 5.0)
-	ylims!(0.0, 7.5*10^4)
+			scatter!(data[1:3, "p [bar]"], data[1:3, "q [g/g]"],
+				     strokewidth=2, color=colors[data_type],
+				     strokecolor=colors[data_type] )
+			scatter!(data[4:end, "p [bar]"], data[4:end, "q [g/g]"],
+				     strokewidth=2, color=(:white, 0.0),
+				     strokecolor=colors[data_type], label=data_type)
+	
+			#=scatter!(data[:, "p [bar]"], data[:, "q [g/g]"],
+				     strokewidth=2, color=gas_to_color[gas],
+				     strokecolor=gas_to_color[gas], label=gas)=#
+		end
+	end
+	
+	if viz_henry
+		ps = [0.0, 100.0]
+		for data_type in data_types
+			H = henry_data[mof][data_type][gas][temp]
+			ms = H * ps
+			if data_type=="ana"
+				lines!(ps, ms, color=colors[data_type], label=data_type)
+			else
+				lines!(ps, ms, color=colors[data_type])
+			end
+		end
+	end
+
+	if temp == "219"
+		axislegend(position=:rt, "data type")
+	else
+		axislegend(position=:lt, "data type")
+	end
+
+	
+	xlims!(xlims[1], xlims[2])
+	ylims!(ylims[1], ylims[2])
+	
 	if save_fig
 		if viz_henry
 			save(mof * "_H_fits.pdf", fig)
@@ -164,7 +249,25 @@ function viz_adsorption_data(mof::String, gas::String, temps::Vector{String}; vi
 end
 
 # ╔═╡ 4f7b9060-19ca-4d7d-af9f-3c5c59dbfa51
-viz_adsorption_data(mofs[1], gases[1],temps, save_fig=false, title="experimental")
+viz_adsorption_data(mofs[1], gases[1], temps, save_fig=false, title="experimental", data_type="exp")
+
+# ╔═╡ 84682ba6-d48f-41bc-98fb-db5ee37412a7
+viz_adsorption_data(mofs[1], gases[1],temps, save_fig=false, title="simulated", data_type="sim")
+
+# ╔═╡ e45d0902-2f30-4de9-9136-8c37de81a82a
+viz_adsorption_data_by_temp(mofs[1], gases[1],temps[1], save_fig=false, title="simulated", xlims=(0.0, 4.5), ylims=(0.0, 7.5*10^4))
+
+# ╔═╡ a22de4f3-dda8-4cc7-8adf-e44e8c3c28ca
+viz_adsorption_data_by_temp(mofs[1], gases[1],temps[2], save_fig=false, title="simulated", xlims=(0.0, 4.5), ylims=(0.0, 7.5*10^4))
+
+# ╔═╡ 21605096-49e3-411a-a46d-da08b151d031
+viz_adsorption_data_by_temp(mofs[1], gases[1],temps[3], save_fig=false, title="simulated", ylims=(0.0, 7.5*10^4), xlims=(0.0, 4.5))
+
+# ╔═╡ 202210bd-04ec-4197-9c9e-34d7d76d2407
+viz_adsorption_data_by_temp(mofs[1], gases[1],temps[4], save_fig=false, title="simulated", ylims=(0.0, 7.5*10^4), xlims=(0.0, 4.5))
+
+# ╔═╡ 94402888-acf4-4039-80be-0b21247441d8
+viz_adsorption_data_by_temp(mofs[1], gases[1],temps[5], save_fig=false, title="simulated", ylims=(0.0, 17.5*10^4), xlims=(0.0, 40.5))
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1833,6 +1936,14 @@ version = "3.5.0+0"
 # ╠═b5a0f095-4e99-4283-85cf-ed9000be0df7
 # ╠═e4ba03b4-949a-40d0-8fd0-6e518de3a5ae
 # ╠═ddddee88-13b5-42b0-ab85-f8a14140c264
+# ╠═0456fa38-f319-4f5d-b9cb-c8b8a233c3ab
+# ╠═cef60e16-df47-45c3-b5b6-24de8cf66b65
 # ╠═4f7b9060-19ca-4d7d-af9f-3c5c59dbfa51
+# ╠═84682ba6-d48f-41bc-98fb-db5ee37412a7
+# ╠═e45d0902-2f30-4de9-9136-8c37de81a82a
+# ╠═a22de4f3-dda8-4cc7-8adf-e44e8c3c28ca
+# ╠═21605096-49e3-411a-a46d-da08b151d031
+# ╠═202210bd-04ec-4197-9c9e-34d7d76d2407
+# ╠═94402888-acf4-4039-80be-0b21247441d8
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

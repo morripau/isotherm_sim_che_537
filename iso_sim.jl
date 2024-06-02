@@ -147,6 +147,7 @@ function viz_adsorption_data(mof::String, gas::String, temps::Vector{String}; vi
 
 	
 	for temp in temps
+		if data_type != "ana"
 		data = isotherms[mof][data_type][gas][temp]
 
 		scatter!(data[1:3, "p [bar]"], data[1:3, "q [g/g]"],
@@ -159,6 +160,7 @@ function viz_adsorption_data(mof::String, gas::String, temps::Vector{String}; vi
 		#=scatter!(data[:, "p [bar]"], data[:, "q [g/g]"],
 			     strokewidth=2, color=gas_to_color[gas],
 			     strokecolor=gas_to_color[gas], label=gas)=#
+		end
 	end
 	
 	if viz_henry
@@ -166,7 +168,11 @@ function viz_adsorption_data(mof::String, gas::String, temps::Vector{String}; vi
 		for temp in temps
 			H = henry_data[mof][data_type][gas][temp]
 			ms = H * ps
-			lines!(ps, ms, color=temp_to_color[temp])
+			if data_type=="ana"
+				lines!(ps, ms, color=temp_to_color[temp], label=data_type)
+			else
+				lines!(ps, ms, color=temp_to_color[temp])
+			end
 		end
 	end
 
@@ -253,6 +259,9 @@ viz_adsorption_data(mofs[1], gases[1], temps, save_fig=false, title="experimenta
 
 # ╔═╡ 84682ba6-d48f-41bc-98fb-db5ee37412a7
 viz_adsorption_data(mofs[1], gases[1],temps, save_fig=false, title="simulated", data_type="sim")
+
+# ╔═╡ 14417e6f-08f4-4728-85c3-e63159ecea5e
+viz_adsorption_data(mofs[1], gases[1], temps, save_fig=false, title="experimental", data_type="ana")
 
 # ╔═╡ e45d0902-2f30-4de9-9136-8c37de81a82a
 viz_adsorption_data_by_temp(mofs[1], gases[1],temps[1], save_fig=false, title="simulated", xlims=(0.0, 4.5), ylims=(0.0, 7.5*10^4))
@@ -1940,6 +1949,7 @@ version = "3.5.0+0"
 # ╠═cef60e16-df47-45c3-b5b6-24de8cf66b65
 # ╠═4f7b9060-19ca-4d7d-af9f-3c5c59dbfa51
 # ╠═84682ba6-d48f-41bc-98fb-db5ee37412a7
+# ╠═14417e6f-08f4-4728-85c3-e63159ecea5e
 # ╠═e45d0902-2f30-4de9-9136-8c37de81a82a
 # ╠═a22de4f3-dda8-4cc7-8adf-e44e8c3c28ca
 # ╠═21605096-49e3-411a-a46d-da08b151d031

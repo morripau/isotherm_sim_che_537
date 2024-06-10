@@ -169,7 +169,7 @@ function viz_adsorption_data(mof::String, gas::String, temps::Vector{String}; vi
 			H = henry_data[mof][data_type][gas][temp]
 			ms = H * ps
 			if data_type=="ana"
-				lines!(ps, ms, color=temp_to_color[temp], label=data_type)
+				lines!(ps, ms, color=temp_to_color[temp], label=temp)
 			else
 				lines!(ps, ms, color=temp_to_color[temp])
 			end
@@ -261,7 +261,7 @@ viz_adsorption_data(mofs[1], gases[1], temps, save_fig=false, title="experimenta
 viz_adsorption_data(mofs[1], gases[1],temps, save_fig=false, title="simulated", data_type="sim")
 
 # ╔═╡ 14417e6f-08f4-4728-85c3-e63159ecea5e
-viz_adsorption_data(mofs[1], gases[1], temps, save_fig=false, title="experimental", data_type="ana")
+viz_adsorption_data(mofs[1], gases[1], temps, save_fig=false, title="analytical", data_type="ana")
 
 # ╔═╡ e45d0902-2f30-4de9-9136-8c37de81a82a
 viz_adsorption_data_by_temp(mofs[1], gases[1],temps[1], save_fig=false, title="simulated", xlims=(0.0, 4.5), ylims=(0.0, 7.5*10^4))
@@ -276,7 +276,7 @@ viz_adsorption_data_by_temp(mofs[1], gases[1],temps[3], save_fig=false, title="s
 viz_adsorption_data_by_temp(mofs[1], gases[1],temps[4], save_fig=false, title="simulated", ylims=(0.0, 7.5*10^4), xlims=(0.0, 4.5))
 
 # ╔═╡ 94402888-acf4-4039-80be-0b21247441d8
-viz_adsorption_data_by_temp(mofs[1], gases[1],temps[5], save_fig=false, title="simulated", ylims=(0.0, 17.5*10^4), xlims=(0.0, 40.5))
+viz_adsorption_data_by_temp(mofs[1], gases[1],temps[5], save_fig=false, title="simulated", ylims=(0.0, 7.5*10^4), xlims=(0.0, 4.5))
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
